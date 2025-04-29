@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fcdl-compiler"
+version = "0.3.0"
+description = "Reference compiler for Federated Compute Declaration Language"
+authors = [{name="S*elf"}]
+readme = "README.md"
+dependencies = [
+    "antlr4-python3-runtime>=4.13",
+    "jinja2>=3.0"
+]
+
+[project.scripts]
+fcdl = "compiler.cli:main"
+
+[tool.setuptools]
+packages = ["compiler", "compiler.fcdl", "compiler.generator"]
+
+[tool.setuptools.package-data]
+"compiler.generator" = ["**/*"]   # include template files
+

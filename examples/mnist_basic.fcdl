@@ -1,0 +1,32 @@
+system "MnistFLBasic" version=1.1 {
+
+    module "DataNodeEven" (role="even") {
+        type = DataSource (path="/data/mnist_even", batchSize=32, shuffle=true)
+    }
+
+    module "DataNodeOdd"  (role="odd") {
+        type = DataSource (path="/data/mnist_odd",  batchSize=32, shuffle=true)
+    }
+
+    module "CnnModel" {
+        type = NeuralNetwork (localEpochs=5, learningRate="0.01")
+        layer (kind="Conv2D",       filters=32, kernelSize=3, activation="relu")
+        layer (kind="MaxPooling2D", poolSize=2)
+        layer (kind="Conv2D",       filters=64, kernelSize=3, activation="relu")
+        layer (kind="MaxPooling2D", poolSize=2)
+        layer (kind="Flatten")
+        layer (kind="Dense", units=128, activation="relu")
+        layer (kind="Dense", units=10,  activation="softmax")
+    }
+
+    module "WebUI" {
+        type = API (gateway="flask", host="0.0.0.0", port=5000)
+    }
+
+    orchestration {
+        (runtime="flower",
+         strategy="FedAvg",
+         rounds=10,
+         deployment_tool="compose")
+    }
+}

@@ -1,0 +1,14 @@
+system "MnistPoc" {
+    module "TrainingData" (role="odd") {
+        type = DataSource
+    }
+
+    module "CnnModel" {
+        type = NeuralNetwork
+        layer (type="Conv2D",filters=32,kernel=3)
+        layer (type="Dense",units=10,activation="softmax")
+    }
+
+    orchestration (runtime="flower") { }   // must exist
+}
+

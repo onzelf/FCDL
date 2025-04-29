@@ -1,0 +1,150 @@
+import sys
+import requests
+import flwr as fl
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, transforms
+
+import time
+import socket
+
+# Role passed as argument: 'even' or 'odd'
+ROLE = sys.argv[1]
+
+def wait_for_server(host: str, port: int, timeout: int = 60):
+    """Wait for Flower server gRPC port to be ready."""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                print(f"Successfully connected to {host}:{port}")
+                return
+        except OSError:
+            print(f"Waiting for {host}:{port}...")
+            time.sleep(2)
+    raise RuntimeError(f"Could not connect to {host}:{port} after {timeout} seconds")
+
+
+def wait_for_ready(url: str, timeout: int = 60):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            r = requests.get(url, timeout=2)
+            if r.status_code == 200:
+                print(f"Orchestrator ready at {url}")
+                return
+        except Exception:
+            pass
+        print(f"Waiting for orchestrator ready at {url}...")
+        time.sleep(2)
+    raise RuntimeError(f"Orchestrator not ready after {timeout} seconds")
+
+
+# Define a simple CNN matching the FCDL spec
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 32, 3, 1)
+        self.pool1 = nn.MaxPool2d(2)
+        self.conv2 = nn.Conv2d(32, 64, 3, 1)
+        self.pool2 = nn.MaxPool2d(2)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(64 * 5 * 5, 128)
+        self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = self.pool1(torch.relu(self.conv1(x)))
+        x = self.pool2(torch.relu(self.conv2(x)))
+        x = self.flatten(x)
+        x = torch.relu(self.fc1(x))
+        x = torch.log_softmax(self.fc2(x), dim=1)
+        return x
+
+# Prepare MNIST dataset and split even/odd by label
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
+dataset_train = datasets.MNIST(root='.', train=True, download=True, transform=transform)
+indices_train = [i for i, (_, label) in enumerate(dataset_train)
+                 if (label % 2 == 0 and ROLE=='even') or (label % 2 == 1 and ROLE=='odd')]
+subset_train = Subset(dataset_train, indices_train)
+train_loader = DataLoader(subset_train, batch_size=32, shuffle=True)
+
+dataset_test = datasets.MNIST(root='.', train=False, download=True, transform=transform)
+indices_test = [i for i, (_, label) in enumerate(dataset_test)
+                if (label % 2 == 0 and ROLE=='even') or (label % 2 == 1 and ROLE=='odd')]
+subset_test = Subset(dataset_test, indices_test)
+test_loader = DataLoader(subset_test, batch_size=32, shuffle=False)
+
+# Set device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = Net().to(device)
+
+# Flower client implementing real training
+class MNISTClient(fl.client.NumPyClient):
+    def get_parameters(self, config):
+        return [val.cpu().numpy() for _, val in model.state_dict().items()]
+
+    def fit(self, parameters, config):
+        # Load global parameters
+        params_dict = zip(model.state_dict().keys(), parameters)
+        state_dict = {k: torch.tensor(v) for k, v in params_dict}
+        model.load_state_dict(state_dict, strict=True)
+        model.train()
+        optimizer = optim.SGD(model.parameters(), lr=0.01)
+        # One local epoch
+        for data, target in train_loader:
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = nn.functional.nll_loss(output, target)
+            loss.backward()
+            optimizer.step()
+        # Return updated model parameters
+        return [val.cpu().detach().numpy() for _, val in model.state_dict().items()], len(train_loader), {}
+
+    def evaluate(self, parameters, config):
+        # Load global parameters
+        params_dict = zip(model.state_dict().keys(), parameters)
+        state_dict = {k: torch.tensor(v) for k, v in params_dict}
+        model.load_state_dict(state_dict, strict=True)
+        model.eval()
+        correct, total, loss = 0, 0, 0.0
+        with torch.no_grad():
+            for data, target in test_loader:
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                loss += nn.functional.nll_loss(output, target, reduction='sum').item()
+                pred = output.argmax(dim=1)
+                correct += pred.eq(target).sum().item()
+                total += target.size(0)
+        accuracy = correct / total
+        return loss / total, total, {"accuracy": accuracy}
+
+if __name__ == "__main__":
+    # First wait for orchestrator HTTP service (port 5000)
+    wait_for_ready("http://orchestrator:5000/status", timeout=60)
+    print("Orchestrator HTTP service is ready")
+
+    # Then register
+    try:
+        response = requests.post(
+            "http://orchestrator:5000/register",
+            json={"id": ROLE, "role": ROLE},
+            timeout=5
+        )
+        print(f"Registration response: {response.status_code} {response.text}")
+    except Exception as e:
+        print(f"Registration error: {e}")
+
+    # Then wait for gRPC server
+    wait_for_server("orchestrator", 8080, timeout=60)
+    print("Orchestrator gRPC service is ready")
+
+    # Start Flower client
+    fl.client.start_numpy_client(server_address="orchestrator:8080", 
+                                client=MNISTClient())

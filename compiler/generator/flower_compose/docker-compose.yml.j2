@@ -1,0 +1,34 @@
+version: "3.9"
+services:
+  orchestrator:
+    build: .
+    command: ["python", "orchestrator.py"]
+    ports:
+      - "5000:5000"    # Flask metrics endpoint
+      - "8080:8080"    # Flower gRPC server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/status", "||", "exit", "0"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: on-failure
+
+  client_even:
+    build: .
+    command: ["python", "client.py", "even"]
+    environment:
+      ROLE: even
+    depends_on:
+      - orchestrator
+    restart: on-failure
+ 
+  client_odd:
+    build: .
+    command: ["python", "client.py", "odd"]
+    environment:
+      ROLE: odd
+    depends_on:
+      - orchestrator
+    restart: on-failure
+  

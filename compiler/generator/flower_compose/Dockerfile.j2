@@ -1,0 +1,13 @@
+FROM python:3.10-slim
+
+# Add curl for health checking
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . /app
+
+# Install dependencies
+RUN pip install --no-cache-dir flwr flask torch torchvision pillow requests
+
+# Default command (overridden by docker-compose commands)
+CMD ["sleep", "infinity"] 

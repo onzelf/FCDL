@@ -1,0 +1,164 @@
+from flask import Flask, request, jsonify, abort
+import flwr as fl
+import threading
+import base64
+import io
+import numpy as np
+import time
+from PIL import Image, ImageOps
+import torchvision.transforms as transforms
+from typing import Tuple, List, Union, Dict, Optional
+
+# Configuration from FCDL attributes
+ROUNDS = {{ rounds|default(5) }}
+PORT   = 5000
+GRPC   = "0.0.0.0:8080"
+
+app = Flask(__name__)
+registry = {}
+metrics = {"round": 0, "acc": 0.0}
+
+# Simple RBAC: only 'even' or 'odd' roles
+ALLOWED = {"even", "odd"}
+@app.post("/register")
+def register():
+    try:
+        data = request.json or {}
+        node_id = data.get("id")
+        role = data.get("role")
+        if role not in ALLOWED:
+            abort(403, f"Role '{role}' not allowed")
+        registry[node_id] = role
+        print(f"Registered client: {node_id} with role {role}")
+        return {"status": "registered", "total": len(registry)}
+    except Exception as e:
+        print(f"Error in register: {e}")
+        return {"status": "error", "message": str(e)}, 500
+
+#explicit signal that orchestrator is ready
+@app.get("/")
+def root():
+    return {"status": "ready", "service": "flower-orchestrator"}
+
+@app.get("/metrics")
+def get_metrics():
+    return jsonify(metrics)
+
+@app.post("/predict")
+def predict():
+    if "model" not in globals():
+        return {"error": "No trained model available"}, 503
+
+    # Expect image bytes sent in POST body
+    if not request.files or "image" not in request.files:
+        return {"error": "Missing 'image' file"}, 400
+
+    img_file = request.files["image"]
+    img = Image.open(img_file.stream).convert("L")  # Grayscale
+
+    transform = transforms.Compose([
+        transforms.Resize((28, 28)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    tensor = transform(img).unsqueeze(0)  # Add batch dimension
+
+    tensor = tensor.to(next(model.parameters()).device)
+    output = model(tensor)
+    pred = output.argmax(dim=1).item()
+
+    return {"prediction": pred}
+
+@app.route("/status", methods=["GET"])
+def get_status():
+    try:
+        return {
+            "status": "ok",
+            "registered_clients": len(registry),
+            "clients": list(registry.keys()),
+            "training_round": metrics["round"],
+            "global_accuracy": metrics["acc"]
+        }
+    except Exception as e:
+        print(f"Error in status route: {e}")
+        return {"status": "error", "message": str(e)}, 500
+    
+
+class FedAvgWithMetrics(fl.server.strategy.FedAvg):
+    def aggregate_evaluate(
+        self,
+        server_round: int,
+        results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.EvaluateRes]],
+        failures: List[Union[Tuple[fl.server.client_proxy.ClientProxy, fl.common.EvaluateRes], BaseException]],
+    ) -> Tuple[Optional[float], Dict[str, fl.common.Scalar]]:
+        """Aggregate evaluation results and update metrics dictionary."""
+        
+        # Update round number in metrics
+        metrics["round"] = server_round
+        
+        # Check if we have any results
+        if not results:
+            print(f"Round {server_round}: No evaluation results")
+            return None, {}
+        
+        # Extract individual accuracies for debugging
+        try:
+            client_accuracies = [r.metrics.get("accuracy", 0.0) for _, r in results]
+            print(f"Round {server_round} client accuracies: {client_accuracies}")
+            
+            # Calculate weighted accuracy based on number of examples
+            accuracies = [r.metrics.get("accuracy", 0.0) * r.num_examples for _, r in results]
+            examples = [r.num_examples for _, r in results]
+            
+            if sum(examples) > 0:
+                weighted_accuracy = sum(accuracies) / sum(examples)
+                print(f"Round {server_round} weighted accuracy: {weighted_accuracy:.4f}")
+                
+                # Update our metrics dictionary for the Flask API
+                metrics["acc"] = float(weighted_accuracy)
+            else:
+                print(f"Round {server_round}: No examples evaluated")
+        except Exception as e:
+            print(f"Error calculating accuracy: {e}")
+            # Print actual structure of results for debugging
+            for i, (_, res) in enumerate(results):
+                print(f"Result {i} structure: {res}")
+                if hasattr(res, 'metrics'):
+                    print(f"Result {i} metrics: {res.metrics}")
+        
+        # Call original aggregate_evaluate from FedAvg
+        return super().aggregate_evaluate(server_round, results, failures)
+
+
+# route to manually set metrics (for debugging)
+@app.post("/debug/metrics")
+def set_metrics():
+    data = request.json
+    if data:
+        metrics.update(data)
+        return {"status": "updated", "metrics": metrics}
+    return {"status": "error", "message": "No data provided"}, 400
+
+
+def start_flask():
+    app.run(host="0.0.0.0", port=PORT)
+
+if __name__ == "__main__":
+    # Start Flask in background
+    threading.Thread(target=start_flask, daemon=True).start()
+
+    # Create strategy with final round evaluation on all clients
+    strategy = FedAvgWithMetrics(
+        min_available_clients=2,
+        min_fit_clients=2,
+        min_evaluate_clients=2,
+        fraction_fit=1.0,           # Use all available clients for training
+        fraction_evaluate=1.0,      # Use all available clients for evaluation
+    )
+
+    # Start Flower in main thread with updated parameters
+    fl.server.start_server(
+        server_address=GRPC,
+        strategy=strategy,
+        config=fl.server.ServerConfig(num_rounds=ROUNDS)
+    )
