@@ -10,7 +10,7 @@ round-based scheduling and live metrics — all launched with one `docker compos
 
 ---
 
-## 🌐 What’s in here?
+## 🌐 🌟 What’s in here?
 
 | Layer | Implementation in this PoC |
 | ----------------------------------- | -------------------------- |
@@ -24,18 +24,18 @@ round-based scheduling and live metrics — all launched with one `docker compos
 ---
 
 ```mermaid
-flowchart TD
-  A[FCDL intent file (.fcdl)] --> B[Parser]
-  B --> C[Intermediate Representation (IR)]
-  C --> D[Planner (choose runtime + deployment)]
-  D --> E[Template Renderer (Jinja2)]
-  E --> F[Generated Stack (docker-compose.yml, orchestrator.py, clients...)]
-  F --> G[Deployment (Docker Compose)]
-  G --> H[Running Federated System (Flower + Flask + PyTorch)]
- 
-  style A fill:#f9f,stroke:#333,stroke-width:2px
-  style H fill:#bbf,stroke:#333,stroke-width:2px
-  ```
+  flowchart TD
+    A[FCDL intent file (.fcdl)] --> B[Parser]
+    B --> C[Intermediate Representation (IR)]
+    C --> D[Planner (choose runtime + deployment)]
+    D --> E[Template Renderer (Jinja2)]
+    E --> F[Generated Stack (docker-compose.yml, orchestrator.py, clients...)]
+    F --> G[Deployment (Docker Compose)]
+    G --> H[Running Federated System (Flower + Flask + PyTorch)]
+  
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style H fill:#bbf,stroke:#333,stroke-width:2px
+```
   
 
 ## 🚀 Quick start (local)
@@ -66,12 +66,7 @@ docker-compose  up  --build
 curl  http://localhost:5000/metrics
 # → {"round":5, "acc":0.55}
 ```  
-**fcdl-poc/**
-├  FCDL.g4  final  grammar (floats & dotted  IDs)
-├  examples/  sample  FCDL  files
-├  fcdl_compiler/  language  tool-chain
-│  └  generator/flower_compose/  compose  template  set
-└  dist/  *←  generated  stacks  land  here*
+
   
 ## What this PoC demonstrates
 
@@ -82,7 +77,7 @@ curl  http://localhost:5000/metrics
 -  Composable  architecture: Swap  the  template  folder  in  the  planner  and  regenerate  for  Kubernetes/Helm,  Airflow,  NVFlare,  etc.
 
   
-## ⚠️ What it does not do (yet)
+## ⚠️ What it does not do (yet) 🚧
 
 | Gap | Notes  /  future-work |
 |--|--|
@@ -135,7 +130,7 @@ MIT  —  see  LICENSE.
 
 	> Add  a  `DistributedLedger`  module  →  compiler  pulls  the  “fabric_compose”  template  →  orchestrator  logs  each  training  contribution  on-chain.  Shows  business  how  royalties  could  be  automated; not  coded  today,  but  the  slot  is  there.
 
-# 🤖 Human-Machine Collaboration in Federated Compute (self-healing Agentic AI)
+# 🤖 🚧 Work in Progress Human-Machine Collaboration in Federated Compute (self-healing Agentic AI)
 
 The FCDL PoC is not only a demonstration of federated learning orchestration —
 it embodies the future of intent-driven computing where humans and machines collaborate to manage distributed systems.
