@@ -33,8 +33,7 @@ round-based scheduling and live metrics — all launched with one `docker compos
     F --> G[Deployment - Docker Compose]
     G --> H[Running Federated System - Flower, Flask, PyTorch]
   
-    style A fill:#ffcc00,stroke:#222,stroke-width:2px
-    style H fill:#00ccff,stroke:#222,stroke-width:2px
+    
 ```
   
 
