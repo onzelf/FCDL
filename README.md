@@ -1,17 +1,16 @@
 # FCDL 1.0  — Federated Services: From Intent to Implementation 📦🚀
 
   
->  **Status:** research proof-of-concept *from intent to implementation*
+>  **Status:** research proof-of-concept ***from intent to implementation***
 
->  **Scope:** shows that a Federated Computing Description Language (FCDL) file can be *compiled* into a runnable Flower-based federated system with node registry, simple policy,
-round-based scheduling and live metrics. 
+>  **Scope:** shows that a distributed system described by a *Federated Computing Description Language* (FCDL) schema can be *compiled* and generate a runnable Flower-based federated system with node registry, simple policy, round-based scheduling and live metrics. 
 
 
 ---
 # 🧭 ** Federated Learning PoC**
 
 This project delivers a **functional Proof of Concept (PoC)** for **Federated Learning (FL)** built entirely using the principles of [Federated Computing (FC)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5218039) — a modular, AI-oriented architectural paradigm for data governance, distributed intelligence, and scalable collaboration.
-> The **PoC:**  seeks to implement a Federated Learning system using MNIST dataset on two nodes but following the principles of Federated Computing.
+> The **PoC:**  implements a Federated Learning system using the MNIST dataset on two nodes following the principles of Federated Computing.
 
 ## ✅ What Was Built
 
@@ -39,7 +38,7 @@ Unlike traditional federated learning demos, this PoC:
 
 -   **End-to-end federated training pipeline**, including orchestration, model aggregation (FedAvg), and weight synchronization
     
--   **REST API** to observe local learning dynamics, status, monitoring, and make predictions
+-   **REST API Endpoints** to observe local learning dynamics, status, monitoring, and make predictions
     
 -   Successful integration of **open-source ML tools** into a federated system without requiring custom infrastructure
     
@@ -54,7 +53,7 @@ Unlike traditional federated learning demos, this PoC:
 | **Compiler (`fcdl`)** | ANTLR → IR → planner → Jinja templates |
 | **Orchestrator** | Flask \+ Flower<br>• `/register` node registry<br>• min-RBAC (`even`/`odd`)<br>• FedAvg scheduler<br>• `/metrics` JSON |
 | **Deployment template** | Docker-Compose (`flower_compose`) |
-| **Clients (dummy)** | Register, then run no-op training loops |
+| **Clients** | Register, then run no-op training loops |
 | **CI artefact** | `dist/mnist/` — compose stack + context JSON |
 
 ---
@@ -101,26 +100,40 @@ docker-compose build --no-cache
 docker-compose  up 
 curl http://localhost:5000/
 {"service":"flower-orchestrator","status":"ready"} 
-curl  http://localhost:5000/metrics
-  {"acc":0.9554,"round":8}
-curl http://localhost:5000/status
-  {"average_accuracy":0.9364,"clients":["even","odd"],"registered_clients":2,"status":"ok","training_round":6}
-
 ```  
 
-## REST API
-The following endpoints are available:
-| Endpoint | Description | 
-|--|--|--|
-| / | root | 
-| /status | system status | 
-| /fed_log | logging/monitor | 
-| /predict/number | make digit prediction and show digit image |
+## REST API Endpoints
+The following endpoints are available in this service:
 
+-   **`GET /metrics`**  
+    Returns the system metricss during training
+  ``` bash
+ curl  http://localhost:5000/metrics
+  {"acc":0.9554,"round":8}
+  ```
 
-
-
+-   **`GET /status`**  
+    Returns the current system status. Useful for health checks and monitoring service availability.
+ ``` bash   
+ curl http://localhost:5000/status
+  {"average_accuracy":0.9364,"clients":["even","odd"],"registered_clients":2,"status":"ok","training_round":6}
+ ```
   
+-   **`GET /fed_log`**  
+    Provides access to application logs for debugging and performance tracking.
+``` bash
+ curl http://localhost:5000/fed_log
+{"accuracy":0.9562,"current_round":8,"model_exists":true,"model_loaded_in_memory":false,"total_rounds":10,"training_complete":false}
+```
+   
+-   **`GET /predict/<number>`**  
+    Performs digit recognition using the MNIST dataset.
+    -   **Input:** A digit index (e.g., `0`–`9`) or custom input depending on your setup.
+    -   **Output:** Predicted digit and the corresponding image.
+``` bash
+curl http://localhost:5000/predict/5
+```
+
 ## What this PoC demonstrates
 
 -  Separation  of  intent & implementation: `mnist_basic.fcdl`  declares  what  not  how; the  compiler  decides  which  runtime/template  to  stitch.
@@ -134,9 +147,9 @@ The following endpoints are available:
 
 | Gap | Notes  /  future-work |
 |--|--|
-| Templates | use of dynamic templates and AI agents for code generation
-| Security | mTLS,  JWT,    policy-as-code. |
-| Distributed  ledger  pillar | No  Fabric/EVM  integration; stubs  only.|
+| Templates | Static templates but provision for dynamic templates and AI agents for code generation
+| Security | not-implemented |
+| Distributed  ledger  pillar | No  Fabric/EVM  integration|
 | Production  deployment | No  Helm  /  Terraform; Docker-compose  only.}
 | IDE  /  LSP  tooling | No  syntax  highlighting  or  auto-complete (future plugin).| 
   
@@ -148,8 +161,7 @@ MIT  —  see  LICENSE.
 
 # 🤖 🚧 Work in Progress Human-Machine Collaboration in Federated Compute.
 
-The FCDL PoC is a simple demonstration of federated learning orchestration —
-it embodies the future of intent-driven computing where humans and machines collaborate to manage distributed systems.
+The FCDL PoC is a simple demonstration of federated learning orchestration — it embodies the future of intent-driven computing where humans and machines collaborate to manage distributed systems.
 
 |Role |Description|
 |---|----|
@@ -209,13 +221,14 @@ Add support for:
  
 ### AI-Assisted Template Generation
 Leverage large language models to:
-- Generate Jinja2 Templates: Create implementation templates based on intent descriptions
+- Generate Jinja Templates: Create implementation templates based on intent schema
 - Debug Assistance: Help troubleshoot deployment issues
 - Code Completion: Assist with FCDL authoring
 
   
 ## Conclusion
 
-The FCDL framework represents a promising approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
+The FCDL framework represents a practical approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
 
-Our MNIST POC demonstrates that this isn't just theoretical - we were able to move from concept to working implementation in a matter of hours. With further development in domain-specific templates and infrastructure integration, FCDL has the potential to significantly accelerate federated computing adoption across industries.
+> This MNIST proof of concept shows a practical implementation of the architecture. With additional development of domain-specific templates and integration with existing infrastructure, FCDL could support broader adoption of federated computing in various industries.
+
