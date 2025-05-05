@@ -1,14 +1,48 @@
-# FCDL PoC — From Intent to Running Federated Stack 📦🚀
+# FCDL 1.0  — Federated Services: From Intent to Implementation 📦🚀
 
   
 >  **Status:** research proof-of-concept *from intent to implementation*
 
->  **Scope:** shows that a single FCDL file can be *compiled* into a runnable Flower-based federated system with node registry, simple policy,
-round-based scheduling and live metrics — all launched with one `docker compose up`.
-
->  **Not production‐hardened.** TLS, Vault, K8s, DLT, full RBAC, etc. are  future work.
+>  **Scope:** shows that a Federated Computing Description Language (FCDL) file can be *compiled* into a runnable Flower-based federated system with node registry, simple policy,
+round-based scheduling and live metrics. 
 
 ---
+# 🧭 ** Federated Learning PoC**
+
+This project delivers a **functional Proof of Concept (PoC)** for **Federated Learning (FL)** built entirely using the principles of [Federated Computing (FC)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5218039) — a modular, AI-oriented architectural paradigm for data governance, distributed intelligence, and scalable collaboration.
+
+## ✅ What Was Built
+
+We implemented a distributed learning system composed of:
+
+-   **Two FL nodes**, each training on isolated (non-IID) subsets of the MNIST dataset. One node uses only even digits and the other only odd digits.
+    
+-   A **central orchestrator**, which coordinates model training rounds, aggregates updates, and manages the lifecycle
+    
+-   A **intent configuration file** (`.fcdl` file), interpreted by a compiler to plan and execute the full system architecture
+    
+
+## 🧠 Why It Matters
+
+Unlike traditional federated learning demos, this PoC:
+
+-   Uses **modular, composable services** (Flask + Docker) instead of monolithic simulation frameworks
+    
+-   **Separates orchestration logic** from implementation, enabling reusability and scale
+    
+-   Aligns with emerging data governance challenges: privacy, transparency, interoperability, and modular compliance
+    
+
+## 🔬 What Was Demonstrated
+
+-   **End-to-end federated training pipeline**, including orchestration, model aggregation (FedAvg), and weight synchronization
+    
+-   **REST API** to observe local learning dynamics, status, monitoring, and make predictions
+    
+-   Successful integration of **open-source ML tools** into a federated system without requiring custom infrastructure
+    
+-   Observed real-world challenges (non-IID divergence, overfitting) and tested mitigation strategies
+    
 
 ## 🌐 🌟 What’s in here?
 
@@ -33,7 +67,6 @@ round-based scheduling and live metrics — all launched with one `docker compos
     F --> G[Deployment - Docker Compose]
     G --> H[Running Federated System - Flower, Flask, PyTorch]
   
-    
 ```
   
 
@@ -41,12 +74,12 @@ round-based scheduling and live metrics — all launched with one `docker compos
 
 # clone & install
 ``` bash
-git  clone  https://github.com/your-org/fcdl-poc.git
-cd  fcdl-poc
+git  clone  https://github.com/onzelf/FCDL.git
+cd  FCDL
 python  -m  venv  .venv && source  .venv/bin/activate
 pip  install  -e  .
 ```
-# generate ANTLR4 artefacts
+# generate ANTLR4 parser/visitor
 ```bash
 cd spec 
 antlr4 -Dlanguage=Python3 -visitor -o ../compiler/fcdl  FCDL.g4 
@@ -61,15 +94,30 @@ fcdl  compile  examples/mnist_basic.fcdl  --out  dist/mnist
 # run!
 ```bash
 cd  dist/mnist
-docker-compose  up  --build
+docker-compose build --no-cache
+docker-compose  up 
+curl http://localhost:5000/
+{"service":"flower-orchestrator","status":"ready"} 
 curl  http://localhost:5000/metrics
-# → {"round":5, "acc":0.55}
+  {"acc":0.9554,"round":8}
+curl http://localhost:5000/status
+  {"average_accuracy":0.9364,"clients":["even","odd"],"registered_clients":2,"status":"ok","training_round":6}
+
 ```  
 
-  
+## REST API
+The following endpoints are available
+| Endpoint | Description | Example|
+|--|--|--|
+| / | root | {"service":"flower-orchestrator","status":"ready"}|
+| /status | system status | {"average_accuracy":0.9364,"clients":["even","odd"],"registered_clients":2,"status":"ok","training_round":6}|
+| /fed_log | logger/monitor | {"accuracy":0.9498,"current_round":9,"model_exists":false,"model_loaded_in_memory":false,"total_rounds":10,"training_complete":false}|
+| /predict/number | make digit prediction and show digit image | |
+
+
 ## What this PoC demonstrates
 
--  Separation  of  intent & implementation: mnist_basic.fcdl  declares  what  not  how; the  compiler  decides  which  runtime/template  to  stitch.
+-  Separation  of  intent & implementation: `mnist_basic.fcdl`  declares  what  not  how; the  compiler  decides  which  runtime/template  to  stitch.
 
 -  Data  sovereignty (code moves,  data  stays): Each  dummy  client  trains  locally; orchestrator  never  sees  raw  data.
 
@@ -80,58 +128,21 @@ curl  http://localhost:5000/metrics
 
 | Gap | Notes  /  future-work |
 |--|--|
-| Security | mTLS,  JWT,  Vault,  policy-as-code. |
+| Templates | use of dynamic templates and AI agents for code generation
+| Security | mTLS,  JWT,    policy-as-code. |
 | Distributed  ledger  pillar | No  Fabric/EVM  integration; stubs  only.|
-| Real  data  /  models | Clients  are  dummy  stubs  —  replace  with  real  training  code.|
-| Production  deployment | No  Helm  /  Terraform; compose  only.}
+| Production  deployment | No  Helm  /  Terraform; Docker-compose  only.}
 | IDE  /  LSP  tooling | No  syntax  highlighting  or  auto-complete (future plugin).| 
   
-  
-  
-
-## 🧩 Extending the PoC
-
--  Replace  dummy  client  —  edit  generator/flower_compose/client.py.j2  and  regenerate.
--  Add  DLT  —  create  a  new  template  folder  flower_compose_dlt/  containing  Fabric  docker-compose & chaincode,  then  point  the  planner  at  it  when  it  sees  DistributedLedger  in  the  FCDL  file.
--  Switch  to  K8s  —  drop  a  Helm  chart  into  generator/flower_helm/,  add  a  planner  rule  deployment_tool  =  helm,  regenerate.
-
  
 ## 📄 License
 
 MIT  —  see  LICENSE.
 
-  
 
-## Narrative for IS seniors managers and strategists
+# 🤖 🚧 Work in Progress Human-Machine Collaboration in Federated Compute.
 
-1. Intent  →  Stack  in  one  command
-    
-    > Show  `mnist_basic.fcdl` (20 lines) → fcdl compile → a runnable
-    Compose folder.
-    
-    2.  Swap  runtime  without  touching  infra  teams
-    
-    > Change  `runtime="ray"`  →  re-compile  →  new  stack  with  Ray‐Serve
-    comes  out.
-    
-    3.  No  lock-in
-    
-    > FCDL  never  names  Docker,  Compose,  or  Flower  –  those  are 
-    compiler  choices.
-    
-    4.  Path  to  production (slide)
-    
-    > *Security  hardening*  →  use  the  same  FCDL,  switch  to  a 
-    helm_secure  template  that  bakes  in  mTLS,  Vault,  Prometheus, 
-    etc.
-    
-	  5. Data  monetisation  concept
-
-	> Add  a  `DistributedLedger`  module  →  compiler  pulls  the  “fabric_compose”  template  →  orchestrator  logs  each  training  contribution  on-chain.  Shows  business  how  royalties  could  be  automated; not  coded  today,  but  the  slot  is  there.
-
-# 🤖 🚧 Work in Progress Human-Machine Collaboration in Federated Compute (self-healing Agentic AI)
-
-The FCDL PoC is not only a demonstration of federated learning orchestration —
+The FCDL PoC is a simple demonstration of federated learning orchestration —
 it embodies the future of intent-driven computing where humans and machines collaborate to manage distributed systems.
 
 |Role |Description|
@@ -140,9 +151,6 @@ it embodies the future of intent-driven computing where humans and machines coll
 |AI Supervisor (future)| Determines HOW to implement the system — selects runtimes, adapts templates, injects optimizations, patches deployment files |dynamically.|
 |Compiler/Planner | Executes static planning today; later, will collaborate with AI agents for dynamic system generation.|
 |Deployment stack | Is generated fully from intent, minimizing human error and accelerating innovation.|
-
-
->Move from hardcoded infrastructures to fluid, evolvable, AI-augmented federated systems  where changing business or research goals means simply editing .fcdl intent files, without re-engineering low-level deployments manually.
  
  ---
 
@@ -152,16 +160,16 @@ it embodies the future of intent-driven computing where humans and machines coll
 
 The FCDL POC demonstrates a powerful approach to federated computing implementation - expressing intent in a high-level domain-specific language that compiles to runnable infrastructure. With this approach:
 
- 1. We've successfully created a working MNIST federated learning system with just 20 lines of FCDL code
+ 1. We've successfully created a working MNIST federated learning system with a FCDL schema
  2. The system includes role-based data nodes, a CNN model, API exposure, and federated orchestration
  3. We've demonstrated separation of intent (what the system should do) from implementation (how it does it)
  4. Our compilation pipeline transforms high-level descriptions into concrete Docker Compose deployments
  5. The implemented system maintains data sovereignty (training happens locally on nodes) while enabling global model improvement
-This POC serves as validation that the FCDL approach can simplify the deployment of complex federated systems while maintaining flexibility.
+ 
 
 ## The Value Proposition
 
-FCDL isn't just an abstraction layer; it's a domain-specific way to define data-driven business infrastructures:
+FCDL is a semantic layer; it's a domain-specific way to define data-driven business infrastructures:
  - For Data Scientists: Focus on models and algorithms without infrastructure complexity
 - For Infrastructure Teams: Standardize deployments and reduce the maintenance burden
 - For Business Leaders: Implement data strategies that maintain sovereignty and compliance
@@ -187,7 +195,7 @@ Instead of building custom templates for every deployment target, integrate with
 
   
 ### Enhanced Security and Compliance
-Add first-class support for:
+Add support for:
 - Data Privacy: Differential privacy, homomorphic encryption options
 - Auditing: Provenance tracking of model contributions
 - Governance: Policy enforcement throughout the federated system
@@ -195,7 +203,7 @@ Add first-class support for:
  
 ### AI-Assisted Template Generation
 Leverage large language models to:
-- Generate Templates: Create implementation templates based on intent descriptions
+- Generate Jinja2 Templates: Create implementation templates based on intent descriptions
 - Debug Assistance: Help troubleshoot deployment issues
 - Code Completion: Assist with FCDL authoring
 
@@ -204,6 +212,4 @@ Leverage large language models to:
 
 The FCDL framework represents a practical approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
 
-Our MNIST POC demonstrates that this isn't just theoretical - we were able to move from concept to working implementation in a matter of hours, not weeks. With further development in domain-specific templates and infrastructure integration, FCDL has the potential to significantly accelerate federated computing adoption across industries.
-
-The future of data-driven systems is federated, not centralized. FCDL provides a pathway to that future that respects both technical realities and business imperatives.
+Our MNIST POC demonstrates that this isn't just theoretical - we were able to move from concept to working implementation in a matter of hours. With further development in domain-specific templates and infrastructure integration, FCDL has the potential to significantly accelerate federated computing adoption across industries.
