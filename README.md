@@ -10,7 +10,6 @@
 # 🧭 **Federated Learning PoC**
 
 This project delivers a **functional Proof of Concept (PoC)** for **Federated Learning (FL)** built entirely using the principles of [Federated Computing (FC)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5218039) — a modular, AI-oriented architectural paradigm for data governance, distributed intelligence, and scalable collaboration.
-> The **PoC:**  implements a Federated Learning system using the MNIST dataset on two nodes following the principles of Federated Computing.
 
 ## ✅ What Was Built
 
@@ -136,7 +135,7 @@ curl http://localhost:5000/predict/5
 
 ## What this PoC demonstrates
 
--  Separation  of  intent & implementation: `mnist_basic.fcdl`  declares  what  not  how; the  compiler  decides  which  runtime/template  to  stitch.
+-  Separation  of  intent & implementation: `examples/mnist_basic.fcdl`  declares  what  not  how; the  compiler  decides  which  runtime/template  to  stitch.
 
 -  Data  sovereignty (code moves,  data  stays): Each  dummy  client  trains  locally; orchestrator  never  sees  raw  data.
 
@@ -147,7 +146,7 @@ curl http://localhost:5000/predict/5
 
 | Gap | Notes  /  future-work |
 |--|--|
-| Templates | Static templates but provision for dynamic templates and AI agents for code generation
+| Templates | Static templates with provision for dynamic templates and AI agents for code generation
 | Security | not-implemented |
 | Distributed  ledger  pillar | No  Fabric/EVM  integration|
 | Production  deployment | No  Helm  /  Terraform; Docker-compose  only.}
@@ -159,9 +158,9 @@ curl http://localhost:5000/predict/5
 MIT  —  see  LICENSE.
 
 
-# 🤖 🚧 Work in Progress Human-Machine Collaboration in Federated Compute.
+# 🤖 🚧 Work in Progress Human-Machine Collaboration in Federated Compute FCDL v 2.0.
 
-The FCDL PoC is a simple demonstration of federated learning orchestration — it embodies the future of intent-driven computing where humans and machines collaborate to manage distributed systems.
+The FCDL1.0 PoC is a simple demonstration of federated learning orchestration — it embodies the future of intent-driven computing where humans and machines collaborate to manage complex distributed systems.
 
 |Role |Description|
 |---|----|
@@ -228,7 +227,7 @@ Leverage large language models to:
   
 ## Conclusion
 
-The FCDL framework represents a practical approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
+The FCDL v1.0 framework represents a promising approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
 
-> This MNIST proof of concept shows a practical implementation of the architecture. With additional development of domain-specific templates and integration with AI code generation agents, FCDL could support broader adoption of federated computing in various industries.
+> This MNIST proof of concept is a practical implementation of the architecture. With additional development of domain-specific templates and integration with AI code generation agents, FCDL could support broader adoption of federated computing in various industries.
 
