@@ -7,7 +7,7 @@
 
 
 ---
-# 🧭 ** Federated Learning PoC**
+# 🧭 **Federated Learning PoC**
 
 This project delivers a **functional Proof of Concept (PoC)** for **Federated Learning (FL)** built entirely using the principles of [Federated Computing (FC)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5218039) — a modular, AI-oriented architectural paradigm for data governance, distributed intelligence, and scalable collaboration.
 > The **PoC:**  implements a Federated Learning system using the MNIST dataset on two nodes following the principles of Federated Computing.
@@ -230,5 +230,5 @@ Leverage large language models to:
 
 The FCDL framework represents a practical approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
 
-> This MNIST proof of concept shows a practical implementation of the architecture. With additional development of domain-specific templates and integration with existing infrastructure, FCDL could support broader adoption of federated computing in various industries.
+> This MNIST proof of concept shows a practical implementation of the architecture. With additional development of domain-specific templates and integration with AI code generation agents, FCDL could support broader adoption of federated computing in various industries.
 
