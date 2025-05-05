@@ -1,18 +1,29 @@
-from flask import Flask, request, jsonify, abort
+import torch
 import flwr as fl
-import threading
-import base64
+import os
 import io
+import base64
+import random
 import numpy as np
+import threading
 import time
-from PIL import Image, ImageOps
+from flask import Flask, request, jsonify, abort
+from PIL import Image
+from PIL.Image import Resampling 
+
+from torchvision import datasets
 import torchvision.transforms as transforms
 from typing import Tuple, List, Union, Dict, Optional
+from logging import INFO, WARNING, ERROR, DEBUG
+from flwr.common.logger import log
+
+# Import the prediction module
+from utility import Net
 
 # Configuration from FCDL attributes
 ROUNDS = {{ rounds|default(5) }}
-PORT   = 5000
-GRPC   = "0.0.0.0:8080"
+PORT = 5000
+GRPC = "0.0.0.0:8080"
 
 app = Flask(__name__)
 registry = {}
@@ -20,6 +31,13 @@ metrics = {"round": 0, "acc": 0.0}
 
 # Simple RBAC: only 'even' or 'odd' roles
 ALLOWED = {"even", "odd"}
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+log(INFO, f"Using device: {device}")
+
+# Global model instance to share across routes
+global_model = None
+
 @app.post("/register")
 def register():
     try:
@@ -29,13 +47,12 @@ def register():
         if role not in ALLOWED:
             abort(403, f"Role '{role}' not allowed")
         registry[node_id] = role
-        print(f"Registered client: {node_id} with role {role}")
+        log(INFO, f"Registered client: {node_id} with role {role}")
         return {"status": "registered", "total": len(registry)}
     except Exception as e:
-        print(f"Error in register: {e}")
+        log(ERROR, f"Error in register: {e}")
         return {"status": "error", "message": str(e)}, 500
 
-#explicit signal that orchestrator is ready
 @app.get("/")
 def root():
     return {"status": "ready", "service": "flower-orchestrator"}
@@ -44,30 +61,65 @@ def root():
 def get_metrics():
     return jsonify(metrics)
 
-@app.post("/predict")
-def predict():
-    if "model" not in globals():
-        return {"error": "No trained model available"}, 503
-
-    # Expect image bytes sent in POST body
-    if not request.files or "image" not in request.files:
-        return {"error": "Missing 'image' file"}, 400
-
-    img_file = request.files["image"]
-    img = Image.open(img_file.stream).convert("L")  # Grayscale
-
-    transform = transforms.Compose([
-        transforms.Resize((28, 28)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
-    tensor = transform(img).unsqueeze(0)  # Add batch dimension
-
-    tensor = tensor.to(next(model.parameters()).device)
-    output = model(tensor)
-    pred = output.argmax(dim=1).item()
-
-    return {"prediction": pred}
+@app.route("/predict/<int:number>", methods=["GET"])
+def predict_number(number):
+    try:
+        # Check if model exists
+        model_path = "final_model.pt"
+        if not os.path.exists(model_path):
+            return "Model not ready yet. Please wait for training to complete."
+        
+        # Load model if not already loaded
+        global global_model
+        if global_model is None:
+            global_model = Net().to(device)
+            global_model.load_state_dict(torch.load(model_path))
+            global_model.eval()
+        
+        # Load MNIST test dataset if not already loaded
+        if not hasattr(predict_number, "dataset"):
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.1307,), (0.3081,))
+            ])
+            predict_number.dataset = datasets.MNIST(
+                root=".", train=False, download=True, transform=transform
+            )
+        
+        # Find examples of the requested digit
+        examples = [i for i, (_, label) in enumerate(predict_number.dataset) if label == number]
+        if not examples:
+            return f"No examples of digit {number} found"
+            
+        idx = random.choice(examples)
+        image, label = predict_number.dataset[idx]
+        
+        # Make prediction
+        with torch.no_grad():
+            output = global_model(image.unsqueeze(0).to(device))
+            pred = output.argmax(dim=1).item()
+        
+        # Convert image to displayable format
+        img = transforms.ToPILImage()(image)
+        img = img.resize( (112,112), resample=Resampling.NEAREST)
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        
+        # Create simple HTML response
+        return f"""
+        <html>
+        <head><title>Prediction for {number}</title></head>
+        <body>
+            <h2>Input: {number}</h2>
+            <h2>Predicted: {pred}</h2>
+            <img src="data:image/png;base64,{img_str}" />
+        </body>
+        </html>
+        """
+    except Exception as e:
+        log(ERROR, f"Error in predict: {e}")
+        return f"Error: {str(e)}"
 
 @app.route("/status", methods=["GET"])
 def get_status():
@@ -77,88 +129,174 @@ def get_status():
             "registered_clients": len(registry),
             "clients": list(registry.keys()),
             "training_round": metrics["round"],
-            "global_accuracy": metrics["acc"]
+            "average_accuracy": metrics["acc"]
         }
     except Exception as e:
-        print(f"Error in status route: {e}")
+        log(ERROR, f"Error in status route: {e}")
         return {"status": "error", "message": str(e)}, 500
-    
 
-class FedAvgWithMetrics(fl.server.strategy.FedAvg):
+@app.route("/model_status")
+def model_status():
+    # Check current round
+    current_round = metrics.get("round", 0)
+    accuracy = metrics.get("acc", 0.0)
+    
+    # Check if model exists
+    model_path = os.path.join(os.getcwd(), "final_model.pt")
+    model_exists = os.path.exists(model_path)
+    model_size = os.path.getsize(model_path) if model_exists else 0
+    
+    # Prepare response
+    status = {
+        "device": str(device),
+        "current_round": current_round,
+        "total_rounds": ROUNDS,
+        "accuracy": accuracy,
+        "model_exists": model_exists,
+        "model_path": model_path,
+        "model_size_bytes": model_size,
+        "training_complete": current_round >= ROUNDS,
+        "model_loaded_in_memory": global_model is not None
+    }
+    
+    return jsonify(status)
+
+
+
+def start_flask():
+    app.run(host="0.0.0.0", port=PORT)
+
+# Define a better Flower strategy
+class SimpleFedAvg(fl.server.strategy.FedAvg):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model = Net().to(device)
+        log(INFO, f"Initialized strategy with model on {device}")
+    
+    def aggregate_fit(
+        self,
+        server_round: int,
+        results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes]],
+        failures: List[Union[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes], BaseException]],
+    ):
+        """Aggregate model weights and update the global model."""
+        if not results:
+            log(WARNING, f"Round {server_round}: No results to aggregate")
+            return None
+        
+        # Call the superclass aggregate_fit to get the aggregated parameters
+        aggregated = super().aggregate_fit(server_round, results, failures)
+        
+        if aggregated is not None:
+            # Update our model with the new parameters
+            parameters, _ = aggregated
+            try:
+                # Convert parameters to NumPy ndarrays
+                ndarrays = fl.common.parameters_to_ndarrays(parameters)
+                
+                # Update our model's state dict
+                state_dict = {}
+                for name, param in zip(self.model.state_dict().keys(), ndarrays):
+                    state_dict[name] = torch.tensor(param).to(device)
+                
+                self.model.load_state_dict(state_dict, strict=True)
+                log(INFO, f"Round {server_round}: Updated model parameters successfully")
+                
+                # Save intermediate model (optional)
+                if server_round % 5 == 0:  # Save every 5 rounds
+                    self.save_model(f"model_round_{server_round}.pt")
+            except Exception as e:
+                log(ERROR, f"Error updating model in round {server_round}: {e}")
+        
+        return aggregated
+    
     def aggregate_evaluate(
         self,
         server_round: int,
         results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.EvaluateRes]],
         failures: List[Union[Tuple[fl.server.client_proxy.ClientProxy, fl.common.EvaluateRes], BaseException]],
     ) -> Tuple[Optional[float], Dict[str, fl.common.Scalar]]:
-        """Aggregate evaluation results and update metrics dictionary."""
-        
-        # Update round number in metrics
+        """Aggregate evaluation results and save final model."""
+        # Update metrics
         metrics["round"] = server_round
         
-        # Check if we have any results
         if not results:
-            print(f"Round {server_round}: No evaluation results")
+            log(WARNING, f"Round {server_round}: No evaluation results")
             return None, {}
         
-        # Extract individual accuracies for debugging
-        try:
-            client_accuracies = [r.metrics.get("accuracy", 0.0) for _, r in results]
-            print(f"Round {server_round} client accuracies: {client_accuracies}")
-            
-            # Calculate weighted accuracy based on number of examples
-            accuracies = [r.metrics.get("accuracy", 0.0) * r.num_examples for _, r in results]
-            examples = [r.num_examples for _, r in results]
-            
-            if sum(examples) > 0:
-                weighted_accuracy = sum(accuracies) / sum(examples)
-                print(f"Round {server_round} weighted accuracy: {weighted_accuracy:.4f}")
-                
-                # Update our metrics dictionary for the Flask API
-                metrics["acc"] = float(weighted_accuracy)
-            else:
-                print(f"Round {server_round}: No examples evaluated")
-        except Exception as e:
-            print(f"Error calculating accuracy: {e}")
-            # Print actual structure of results for debugging
-            for i, (_, res) in enumerate(results):
-                print(f"Result {i} structure: {res}")
-                if hasattr(res, 'metrics'):
-                    print(f"Result {i} metrics: {res.metrics}")
+        # Calculate weighted accuracy
+        accuracies = [r.metrics.get("accuracy", 0.0) * r.num_examples for _, r in results]
+        examples = [r.num_examples for _, r in results]
         
-        # Call original aggregate_evaluate from FedAvg
+        if sum(examples) > 0:
+            accuracy = sum(accuracies) / sum(examples)
+            log(INFO, f"Round {server_round}: Accuracy = {accuracy:.4f}")
+            metrics["acc"] = float(accuracy)
+            
+            # Save model at final round
+            if server_round == ROUNDS:
+                self.save_model("final_model.pt")
+                log(INFO, f"Final round {server_round}: Model saved to final_model.pt")
+                
+                # Also update the global model for the predict endpoint
+                global global_model
+                global_model = self.model
+        
+        # Call superclass method
         return super().aggregate_evaluate(server_round, results, failures)
+    
+    def save_model(self, filename: str):
+        """Save the current model to a file."""
+        try:
+            torch.save(self.model.state_dict(), filename)
+            log(INFO, f"Model saved to {filename}")
+        except Exception as e:
+            log(ERROR, f"Error saving model to {filename}: {e}")
 
-
-# route to manually set metrics (for debugging)
-@app.post("/debug/metrics")
-def set_metrics():
-    data = request.json
-    if data:
-        metrics.update(data)
-        return {"status": "updated", "metrics": metrics}
-    return {"status": "error", "message": "No data provided"}, 400
-
-
-def start_flask():
-    app.run(host="0.0.0.0", port=PORT)
+# Fed log endpoint
+@app.route("/fed_log")
+def fed_log():
+    model_path = "final_model.pt"
+    model_exists = os.path.exists(model_path)
+    return jsonify({
+        "current_round": metrics.get("round", 0),
+        "total_rounds": ROUNDS,
+        "accuracy": metrics.get("acc", 0.0),
+        "model_exists": model_exists,
+        "training_complete": metrics.get("round", 0) >= ROUNDS,
+        "model_loaded_in_memory": global_model is not None
+    })
 
 if __name__ == "__main__":
     # Start Flask in background
     threading.Thread(target=start_flask, daemon=True).start()
-
-    # Create strategy with final round evaluation on all clients
-    strategy = FedAvgWithMetrics(
+    log(INFO, f"Started Flask server on port {PORT}")
+    
+    # Create Flower strategy
+    strategy = SimpleFedAvg(
         min_available_clients=2,
         min_fit_clients=2,
         min_evaluate_clients=2,
-        fraction_fit=1.0,           # Use all available clients for training
-        fraction_evaluate=1.0,      # Use all available clients for evaluation
+        fraction_fit=1.0,
+        fraction_evaluate=1.0
     )
-
-    # Start Flower in main thread with updated parameters
-    fl.server.start_server(
-        server_address=GRPC,
-        strategy=strategy,
-        config=fl.server.ServerConfig(num_rounds=ROUNDS)
-    )
+    
+    try:
+        log(INFO, f"Starting Flower server on {GRPC}")
+        fl.server.start_server(
+            server_address=GRPC,
+            strategy=strategy,
+            config=fl.server.ServerConfig(num_rounds=ROUNDS)
+        )
+        log(INFO, "Flower server training completed successfully")
+    except Exception as e:
+        log(ERROR, f"Error during Flower server execution: {e}")
+    
+    log(INFO, "Training completed. Access /predict/<digit> to test the model.")
+    
+    # Keep the server running even after training is complete
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        log(INFO, "Shutting down orchestrator...")

@@ -6,14 +6,16 @@
 >  **Scope:** shows that a Federated Computing Description Language (FCDL) file can be *compiled* into a runnable Flower-based federated system with node registry, simple policy,
 round-based scheduling and live metrics. 
 
+
 ---
 # 🧭 ** Federated Learning PoC**
 
 This project delivers a **functional Proof of Concept (PoC)** for **Federated Learning (FL)** built entirely using the principles of [Federated Computing (FC)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5218039) — a modular, AI-oriented architectural paradigm for data governance, distributed intelligence, and scalable collaboration.
+> The **PoC:**  seeks to implement a Federated Learning system using MNIST dataset on two nodes but following the principles of Federated Computing.
 
 ## ✅ What Was Built
 
-We implemented a distributed learning system composed of:
+We implemented a federated learning system composed of:
 
 -   **Two FL nodes**, each training on isolated (non-IID) subsets of the MNIST dataset. One node uses only even digits and the other only odd digits.
     
@@ -67,6 +69,7 @@ Unlike traditional federated learning demos, this PoC:
     F --> G[Deployment - Docker Compose]
     G --> H[Running Federated System - Flower, Flask, PyTorch]
   
+    
 ```
   
 
@@ -106,15 +109,18 @@ curl http://localhost:5000/status
 ```  
 
 ## REST API
-The following endpoints are available
-| Endpoint | Description | Example|
+The following endpoints are available:
+| Endpoint | Description | 
 |--|--|--|
-| / | root | {"service":"flower-orchestrator","status":"ready"}|
-| /status | system status | {"average_accuracy":0.9364,"clients":["even","odd"],"registered_clients":2,"status":"ok","training_round":6}|
-| /fed_log | logger/monitor | {"accuracy":0.9498,"current_round":9,"model_exists":false,"model_loaded_in_memory":false,"total_rounds":10,"training_complete":false}|
-| /predict/number | make digit prediction and show digit image | |
+| / | root | 
+| /status | system status | 
+| /fed_log | logging/monitor | 
+| /predict/number | make digit prediction and show digit image |
 
 
+
+
+  
 ## What this PoC demonstrates
 
 -  Separation  of  intent & implementation: `mnist_basic.fcdl`  declares  what  not  how; the  compiler  decides  which  runtime/template  to  stitch.
@@ -210,6 +216,6 @@ Leverage large language models to:
   
 ## Conclusion
 
-The FCDL framework represents a practical approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
+The FCDL framework represents a promising approach to the complex challenge of federated computing deployment. By separating intent from implementation, it creates a foundation for more maintainable, adaptable federated systems.
 
 Our MNIST POC demonstrates that this isn't just theoretical - we were able to move from concept to working implementation in a matter of hours. With further development in domain-specific templates and infrastructure integration, FCDL has the potential to significantly accelerate federated computing adoption across industries.
